@@ -4,12 +4,13 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_qdrant import QdrantVectorStore
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 load_dotenv()
 
 COLLECTION = "langchain_101"
-K = 10
+K = 4
 FOLDER = "policies"
 
 client = QdrantClient(url="http://localhost:6333")
@@ -21,9 +22,9 @@ embeddings = GoogleGenerativeAIEmbeddings(
 )
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-3.8-flash",
+    model="gemini-3.5-flash-lite",
     google_api_key=os.getenv("GEMINI_API_KEY"),
-    temperature=0,
+    # temperature=0,
 )
 
 prompt = ChatPromptTemplate.from_messages(
@@ -40,31 +41,36 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
+vectorstore = QdrantVectorStore(
+    client=client,
+    collection_name=COLLECTION,
+    embedding=embeddings,
+)
+
+retriever = vectorstore.as_retriever(
+    search_type="mmr",
+    search_kwargs={
+        "k": K,
+        # metadata filter: only chunks whose metadata "folder" is "policies" are searched
+        # "filter": Filter(must=[FieldCondition(key="metadata.folder", match=MatchValue(value=FOLDER))]),
+    },
+)
+
 # lcel 
 chain = prompt | llm | StrOutputParser()
 
 
 def retrieve(query: str) -> str:
-    vector = embeddings.embed_query(query)
-    hits = client.query_points(
-        collection_name=COLLECTION,
-        query=vector,
-        # metadata filter: only chunks whose payload "folder" is "policies" are searched
-        # query_filter=Filter(
-        #     must=[FieldCondition(key="folder", match=MatchValue(value=FOLDER))]
-        # ),
-        limit=K,
-        with_payload=True,
-    ).points
+    docs = retriever.invoke(query)
 
-    for h in hits:
-        print(f"retrieved: folder={h.payload.get('folder')} source={h.payload.get('source')} score={h.score:.4f}")
+    for d in docs:
+        print(f"retrieved: folder={d.metadata.get('folder')} source={d.metadata.get('source')} h2={d.metadata.get('h2')}")
 
     # joining the context, because k=3, but for llm, only 1 context should be gone na, it concatenates into one
                                   # source added by pdf loader !! 
     return "\n\n---\n\n".join(
-        f"[Source: {h.payload.get('source')}, page {h.payload.get('page')}]\n{h.payload['page_content']}"
-        for h in hits
+        f"[Source: {d.metadata.get('source')}, page {d.metadata.get('page')}]\n{d.page_content}"
+        for d in docs
     )
 
 

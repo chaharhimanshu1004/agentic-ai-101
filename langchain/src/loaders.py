@@ -17,7 +17,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 load_dotenv()
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent / "knowledge"
-OCR_MODEL = "gemini-3.8-flash"
+OCR_MODEL = "gemini-3.5-flash-lite"
 OCR_PROMPT = (
     "Transcribe all the text on this scanned page exactly as written. "
     "Render tables as markdown tables. Output only the transcribed text."
@@ -35,7 +35,7 @@ def ocr_pdf_page(pdf: pymupdf.Document, page_number: int) -> str:
         ]
     )
     ocr = ChatGoogleGenerativeAI(
-        model=OCR_MODEL, google_api_key=os.getenv("GEMINI_API_KEY"), temperature=0
+        model=OCR_MODEL, google_api_key=os.getenv("GEMINI_API_KEY")
     )
     return (ocr | StrOutputParser()).invoke([message])
 

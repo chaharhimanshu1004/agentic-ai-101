@@ -55,7 +55,7 @@ if new:
         PointStruct(
             id=pid,
             vector=vector,
-            payload={"page_content": chunk.page_content, **chunk.metadata},
+            payload={"page_content": chunk.page_content, "metadata": chunk.metadata},
         )
         for (pid, chunk), vector in zip(new.items(), vectors)
     ]
