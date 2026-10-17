@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
+from qdrant_client.models import FieldCondition, Filter, MatchValue
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
@@ -8,7 +9,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 load_dotenv()
 
 COLLECTION = "langchain_101"
-K = 3
+K = 10
+FOLDER = "policies"
 
 client = QdrantClient(url="http://localhost:6333")
 
@@ -47,9 +49,16 @@ def retrieve(query: str) -> str:
     hits = client.query_points(
         collection_name=COLLECTION,
         query=vector,
+        # metadata filter: only chunks whose payload "folder" is "policies" are searched
+        # query_filter=Filter(
+        #     must=[FieldCondition(key="folder", match=MatchValue(value=FOLDER))]
+        # ),
         limit=K,
         with_payload=True,
     ).points
+
+    for h in hits:
+        print(f"retrieved: folder={h.payload.get('folder')} source={h.payload.get('source')} score={h.score:.4f}")
 
     # joining the context, because k=3, but for llm, only 1 context should be gone na, it concatenates into one
                                   # source added by pdf loader !! 
@@ -62,7 +71,9 @@ def retrieve(query: str) -> str:
 if __name__ == "__main__":
     query = input("Ask a question: ").strip()
     context = retrieve(query)
-    print(f"context: {context}")
+    # print(f"context: {context}")
+    print("------------------------------------------------")
+    print("------------------------------------------------")
     try:
         print(chain.invoke({"context": context, "question": query}))
     except Exception as e:
