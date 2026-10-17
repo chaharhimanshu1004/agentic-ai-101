@@ -14,8 +14,8 @@ if not client.collection_exists(COLLECTION):
         vectors_config=VectorParams(size=DIMENSIONS, distance=Distance.COSINE),
     )
 
-chunks = policyChunks + employeeChunks
-vectors = policyVectors + employeeVectors
+chunks = policyChunks + employeeChunks # arr1 + arr2 = arr3, arr1=n size, arr2 = m size
+vectors = policyVectors + employeeVectors # arr1 + arr2 = arr3, so arr3[n] = arr2[0]
 
 points = [
     PointStruct(
@@ -23,7 +23,7 @@ points = [
         vector=vector,
         payload={"page_content": chunk.page_content, **chunk.metadata},
     )
-    for i, (chunk, vector) in enumerate(zip(chunks, vectors))
+    for i, (chunk, vector) in enumerate(zip(chunks, vectors)) #zip(chunks, vectors) pairs them via posn, hence i=0 -> chunks[0], vectors[0] we get, enumerate adds the counter in starting 
 ]
 
 client.upsert(collection_name=COLLECTION, points=points)
