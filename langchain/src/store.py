@@ -1,10 +1,15 @@
+import hashlib
+import uuid
+
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
-from chunking import policyChunks, employeeChunks
-from embedding import policyVectors, employeeVectors
+from loaders import load_knowledge
+from chunking import chunk_documents
+from embedding import embed_chunks
 
 COLLECTION = "langchain_101"
 DIMENSIONS = 1536
+BATCH_SIZE = 64
 
 client = QdrantClient(url="http://localhost:6333")
 
@@ -14,19 +19,48 @@ if not client.collection_exists(COLLECTION):
         vectors_config=VectorParams(size=DIMENSIONS, distance=Distance.COSINE),
     )
 
-chunks = policyChunks + employeeChunks # arr1 + arr2 = arr3, arr1=n size, arr2 = m size
-vectors = policyVectors + employeeVectors # arr1 + arr2 = arr3, so arr3[n] = arr2[0]
 
-points = [
-    PointStruct(
-        id=i,
-        vector=vector,
-        payload={"page_content": chunk.page_content, **chunk.metadata},
+def content_id(text: str) -> str:
+    # point id = hash of the chunk text (first 128 bits of sha256 as a uuid), so identical
+    # content always maps to the same id and can be detected without comparing vectors
+    return str(uuid.UUID(hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]))
+
+
+chunks = chunk_documents(load_knowledge())
+
+# dedupe inside this run too: same text twice -> one point (first occurrence wins)
+unique = {}
+for chunk in chunks:
+    unique.setdefault(content_id(chunk.page_content), chunk)
+
+# ask Qdrant which ids are already stored; only brand-new chunks are embedded and inserted,
+# so re-running never rewrites existing points and never pays for embeddings twice
+ids = list(unique)
+existing = set()
+for i in range(0, len(ids), BATCH_SIZE):
+    found = client.retrieve(
+        collection_name=COLLECTION,
+        ids=ids[i : i + BATCH_SIZE],
+        with_payload=False,
+        with_vectors=False,
     )
-    for i, (chunk, vector) in enumerate(zip(chunks, vectors)) #zip(chunks, vectors) pairs them via posn, hence i=0 -> chunks[0], vectors[0] we get, enumerate adds the counter in starting 
-]
+    existing.update(str(p.id) for p in found)
 
-client.upsert(collection_name=COLLECTION, points=points)
+new = {pid: chunk for pid, chunk in unique.items() if pid not in existing}
+print(f"{len(chunks)} chunks -> {len(unique)} unique, {len(existing)} already stored, {len(new)} new")
 
-print(f"Stored {len(points)} points in '{COLLECTION}' (dimension {DIMENSIONS})")
+if new:
+    vectors = embed_chunks(list(new.values()))
+    points = [
+        PointStruct(
+            id=pid,
+            vector=vector,
+            payload={"page_content": chunk.page_content, **chunk.metadata},
+        )
+        for (pid, chunk), vector in zip(new.items(), vectors)
+    ]
+    for i in range(0, len(points), BATCH_SIZE):
+        client.upsert(collection_name=COLLECTION, points=points[i : i + BATCH_SIZE])
+
+print(f"Inserted {len(new)} points in '{COLLECTION}' (dimension {DIMENSIONS})")
 print(f"Collection point count: {client.count(COLLECTION).count}")
