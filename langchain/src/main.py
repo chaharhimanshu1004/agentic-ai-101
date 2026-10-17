@@ -7,7 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmb
 
 load_dotenv()
 
-COLLECTION = "langchain_hw"
+COLLECTION = "langchain_101"
 K = 3
 
 client = QdrantClient(url="http://localhost:6333")

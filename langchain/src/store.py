@@ -3,7 +3,7 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from chunking import policyChunks, employeeChunks
 from embedding import policyVectors, employeeVectors
 
-COLLECTION = "langchain_hw"
+COLLECTION = "langchain_101"
 DIMENSIONS = 1536
 
 client = QdrantClient(url="http://localhost:6333")
