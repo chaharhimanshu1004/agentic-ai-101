@@ -64,7 +64,8 @@ def retrieve(query: str) -> str:
     docs = retriever.invoke(query)
 
     for d in docs:
-        print(f"retrieved: folder={d.metadata.get('folder')} source={d.metadata.get('source')} h2={d.metadata.get('h2')}")
+        # print(f"retrieved: folder={d.metadata.get('folder')} source={d.metadata.get('source')} h2={d.metadata.get('h2')}")
+        print(f"retrieved: source={d.metadata.get('source')} page_content: {d.page_content}")
 
     # joining the context, because k=3, but for llm, only 1 context should be gone na, it concatenates into one
                                   # source added by pdf loader !! 
@@ -81,6 +82,8 @@ if __name__ == "__main__":
     print("------------------------------------------------")
     print("------------------------------------------------")
     try:
-        print(chain.invoke({"context": context, "question": query}))
+        # print(chain.invoke({"context": context, "question": query}))
+        for token in chain.stream({"context": context, "question": query}):
+            print(token, end="", flush=True)
     except Exception as e:
         print(f"Error while invoking chain: {type(e).__name__}: {e}")
